@@ -6,7 +6,7 @@ import pandas as pd
 
 def generate_csv(image_dir, output_csv):
     data = []
-    for label in ['CORRODED', 'NOT CORRODED']:
+    for label in ['cracked', 'not_cracked']:
         folder = os.path.join(image_dir, label)
         if not os.path.exists(folder):
             print(f"Warning: Directory {folder} does not exist. Skipping.")

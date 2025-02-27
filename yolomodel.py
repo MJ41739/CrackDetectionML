@@ -26,7 +26,7 @@ class CrackDataset(Dataset):
 
     def __getitem__(self, idx):
         label_encoder = LabelEncoder()
-        label_encoder.fit(['cracked', 'not cracked'])
+        label_encoder.fit(['cracked', 'not_cracked'])
 
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = Image.open(img_path).convert("RGB")
