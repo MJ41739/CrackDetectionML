@@ -8,10 +8,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.metrics import f1_score
+from tensorflow.keras.callbacks import Callback
 from tensorflow.keras import layers, models
 from tensorflow.keras.utils import to_categorical
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping
+
+
 
 # Data Preprocessing
 def preprocess_images(df):
@@ -52,30 +58,104 @@ def load_dataset(csv_path):
 # Build Model
 def build_model():
     model = models.Sequential([
-        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 3)),
-        layers.MaxPooling2D(2, 2),
-        layers.Conv2D(64, (3, 3), activation='relu'),
-        layers.MaxPooling2D(2, 2),
+
+        layers.Conv2D(
+            32, (3,3),
+            activation='relu',
+            padding='same',
+            kernel_regularizer=l2(0.001),
+            input_shape=(128,128,3)
+        ),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D(2,2),
+
+        layers.Conv2D(
+            64, (3,3),
+            activation='relu',
+            padding='same',
+            kernel_regularizer=l2(0.001)
+        ),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D(2,2),
+
         layers.Flatten(),
-        layers.Dense(128, activation='relu'),
+
+        layers.Dense(
+            128,
+            activation='relu',
+            kernel_regularizer=l2(0.001)
+        ),
         layers.Dropout(0.5),
+
         layers.Dense(2, activation='softmax')
     ])
 
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
     return model
+
+data_gen = ImageDataGenerator(
+    rotation_range=15,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    zoom_range=0.1,
+    horizontal_flip=True
+)
+
+class F1ScoreCallback(Callback):
+    def __init__(self, X_train, y_train, X_val, y_val):
+        super().__init__()
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
+
+        self.train_f1 = []
+        self.val_f1 = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        # ---- TRAIN F1 ----
+        y_train_pred = np.argmax(self.model.predict(self.X_train, verbose=0), axis=1)
+        y_train_true = np.argmax(self.y_train, axis=1)
+        train_f1 = f1_score(y_train_true, y_train_pred, average='weighted')
+        self.train_f1.append(train_f1)
+
+        # ---- VALIDATION F1 ----
+        y_val_pred = np.argmax(self.model.predict(self.X_val, verbose=0), axis=1)
+        y_val_true = np.argmax(self.y_val, axis=1)
+        val_f1 = f1_score(y_val_true, y_val_pred, average='weighted')
+        self.val_f1.append(val_f1)
+
+        print(f" — train_f1: {train_f1:.4f} — val_f1: {val_f1:.4f}")
+
 
 # Train Model
 def train_model(model, X_train, y_train, X_val, y_val):
-    history = model.fit(
-        X_train, y_train,
-        epochs=30,
-        validation_data=(X_val, y_val),
-        batch_size=32
-    )
-    return history
 
-def evaluate_model(model, X_test, y_test, history):
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=5,
+        restore_best_weights=True
+    )
+
+    f1_callback = F1ScoreCallback(X_train, y_train, X_val, y_val)
+
+    history = model.fit(
+        data_gen.flow(X_train, y_train, batch_size=32),
+        validation_data=(X_val, y_val),
+        epochs=50,
+        callbacks=[early_stop, f1_callback],
+        verbose=1
+    )
+
+    return history, f1_callback
+
+def evaluate_model(model, X_test, y_test, history, f1_callback):
+
     # ---------- Predictions ----------
     y_pred = model.predict(X_test)
     y_pred_labels = np.argmax(y_pred, axis=1)
@@ -95,8 +175,8 @@ def evaluate_model(model, X_test, y_test, history):
     plt.figure(figsize=(6,6))
     sns.heatmap(
         cm, annot=True, fmt="d", cmap="Blues",
-        xticklabels=['Non-Corroded','Corroded'],
-        yticklabels=['Non-Corroded','Corroded']
+        xticklabels=['Non-Cracked','Cracked'],
+        yticklabels=['Non-Cracked','Cracked']
     )
     plt.title("Confusion Matrix")
     plt.ylabel("True")
@@ -144,6 +224,32 @@ def evaluate_model(model, X_test, y_test, history):
     plt.legend()
     plt.grid(True)
     plt.show()
+
+    train_acc = history.history["accuracy"]
+    val_acc = history.history["val_accuracy"]
+
+    plt.figure(figsize=(6,4))
+    plt.plot(train_acc, label="Train Accuracy")
+    plt.plot(val_acc, label="Validation Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy vs Epoch")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+    plt.figure(figsize=(6,4))
+    plt.plot(f1_callback.train_f1, label="Train F1 Score")
+    plt.plot(f1_callback.val_f1, label="Validation F1 Score")
+    plt.xlabel("Epoch")
+    plt.ylabel("F1 Score")
+    plt.title("F1 Score vs Epoch")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
 
 # # Evaluate Model
 # def evaluate_model(self):
@@ -277,11 +383,19 @@ class CrackDetectionApp:
     def train_model(self):
         X_train, X_val, X_test, y_train, y_val, y_test = self.preprocess_and_split()
         if X_train is None:
-            return
+          return
+
+        self.model = build_model()
+        self.history, self.f1_callback = train_model(
+        self.model, X_train, y_train, X_val, y_val
+    )
+
+        messagebox.showinfo("Success", "Model trained successfully.")
+
 
         try:
             self.model = build_model()
-            self.history = train_model(self.model, X_train, y_train, X_val, y_val)
+            self.history, self.f1_callback = train_model(self.model, X_train, y_train, X_val, y_val)
             messagebox.showinfo("Success", "Model trained successfully.")
         except Exception as e:
             messagebox.showerror("Error", f"Error training model: {e}")
@@ -307,7 +421,13 @@ class CrackDetectionApp:
 
         X_train, X_val, X_test, y_train, y_val, y_test = self.preprocess_and_split()
 
-        evaluate_model(self.model, X_test, y_test, self.history)
+        evaluate_model(
+    self.model,
+    X_test,
+    y_test,
+    self.history,
+    self.f1_callback
+)
 
         messagebox.showinfo("Done", "Model evaluation completed!")
 
