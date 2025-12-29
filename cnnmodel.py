@@ -161,6 +161,34 @@ def evaluate_model(model, X_test, y_test, history, f1_callback):
     y_pred_labels = np.argmax(y_pred, axis=1)
     y_test_labels = np.argmax(y_test, axis=1)
 
+    y_pred = model.predict(X_test)
+    y_pred_labels = np.argmax(y_pred, axis=1)
+    y_true_labels = np.argmax(y_test, axis=1)
+
+
+    # ----- Confusion Matrix -----
+    cm = confusion_matrix(y_true_labels, y_pred_labels)
+
+    plt.figure(figsize=(6,6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        cbar=False,
+        linewidths=1,
+        linecolor='black',
+        xticklabels=['Cracks', 'Non-Cracks'],
+        yticklabels=['Cracks', 'Non-Cracks']
+    )
+
+    plt.xlabel("Predicted", fontsize=12)
+    plt.ylabel("Actual", fontsize=12)
+    plt.title("Confusion Matrix for Proposed CNN Model", fontsize=14)
+
+    plt.tight_layout()
+    plt.show()
+
     # ---------- Accuracy ----------
     accuracy = np.mean(y_pred_labels == y_test_labels)
     print(f"Model Accuracy: {accuracy*100:.2f}%")
@@ -248,65 +276,6 @@ def evaluate_model(model, X_test, y_test, history, f1_callback):
     plt.legend()
     plt.grid(True)
     plt.show()
-
-
-
-# # Evaluate Model
-# def evaluate_model(self):
-#     if self.model is None:
-#         messagebox.showwarning("Warning", "Please train the model first.")
-#         return
-
-#     X_train, X_val, X_test, y_train, y_val, y_test = self.preprocess_and_split()
-#     if X_test is None:
-#         return
-
-#     try:
-#         # Make predictions on the test set
-#         y_pred = self.model.predict(X_test)
-#         y_pred_labels = np.argmax(y_pred, axis=1)
-#         y_test_labels = np.argmax(y_test, axis=1)
-
-#         # Counting corroded and non-corroded images
-#         corroded_count = sum(y_test_labels == 1)  # Assuming 1 is for corroded
-#         non_corroded_count = sum(y_test_labels == 0)  # Assuming 0 is for non-corroded
-
-#         total_images = len(y_test_labels)
-
-#         # Displaying the analysis
-#         print(f"Total images tested: {total_images}")
-#         print(f"Corroded images: {corroded_count}")
-#         print(f"Non-corroded images: {non_corroded_count}")
-
-#         # Create a confusion matrix
-#         cm = confusion_matrix(y_test_labels, y_pred_labels)
-
-#         # Plotting confusion matrix as heatmap
-#         plt.figure(figsize=(6, 6))
-#         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Non-Corroded', 'Corroded'], yticklabels=['Non-Corroded', 'Corroded'])
-#         plt.title('Confusion Matrix')
-#         plt.ylabel('True Labels')
-#         plt.xlabel('Predicted Labels')
-#         plt.show()
-
-#         # Classification Report with accuracy
-#         report = classification_report(y_test_labels, y_pred_labels, output_dict=True)
-#         accuracy = report["accuracy"]
-#         print(f"Model Accuracy: {accuracy * 100:.2f}%")
-
-#         # Plotting the accuracy
-#         plt.figure(figsize=(4, 4))
-#         plt.bar(['Accuracy'], [accuracy], color='green')
-#         plt.ylim(0, 1)
-#         plt.title("Model Accuracy")
-#         plt.ylabel("Accuracy")
-#         plt.show()
-
-#         # Show success message
-#         messagebox.showinfo("Evaluation", "Model evaluation completed. Check the graphical output.")
-    
-#     except Exception as e:
-#         messagebox.showerror("Error", f"Error during model evaluation: {e}")
 
 
 
